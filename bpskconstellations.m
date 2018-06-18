@@ -23,16 +23,16 @@ for index=1:size(b,2)
 end
 
 %Generated bit stream impulses
-% figure(1);
-% stem(b);
-% xlabel('Time (seconds)-->')
-% ylabel('Amplitude (volts)-->')
-% title('Impulses of bits to be transmitted');
-% figure(2);
-% plot(NRZ_out);
-% xlabel('Time (seconds)-->');
-% ylabel('Amplitude (volts)-->');
-% title('Generated NRZ signal');
+figure(1);
+stem(b);
+xlabel('Time (seconds)-->')
+ylabel('Amplitude (volts)-->')
+title('Impulses of bits to be transmitted');
+figure(2);
+plot(NRZ_out);
+xlabel('Time (seconds)-->');
+ylabel('Amplitude (volts)-->');
+title('Generated NRZ signal');
 
 t=0.005:0.005:5;
 %Frequency of the carrier
