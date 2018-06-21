@@ -49,8 +49,6 @@ if(dataColNum < 8)
     bitsToInterleave = [bitsToInterleave 0];
   endfor
 
-  % dataBits = [bitsToInterleave dataBits];
-  % interleavePosition = dataColNum+numOfBitsToInterleave+1;
   dataBitsInterleaved = [];
   for k = 0:(dataRowNum-1)
     startBit = 1+dataColNum*i;
@@ -80,11 +78,10 @@ dataSymbols = [];
 for k = 1:bitsPerSymbol:length(frame)
   symbolToAdd = 0;
   for q = 1:(bitsPerSymbol)
-    symbolToAdd += frame(q)*2^(bitsPerSymbol-q);
+    symbolToAdd += frame(k+(q-1))*2^(bitsPerSymbol-q);
   endfor
   symbolToAdd+=1; %Because I am using based-1
-  dataSymbols = [dataSymbols (((frame(k)*2^1)+frame(k+1))+1)*ones(1,number) ];
-  % dataSymbols = [dataSymbols symbolToAdd*ones(1,number) ];
+  dataSymbols = [dataSymbols symbolToAdd*ones(1,number) ];
 endfor
 
 dataEncoded = symbolMap(dataSymbols);
@@ -93,8 +90,9 @@ dataEncoded = symbolMap(dataSymbols);
 % Now lets modulate the signal
 
 T = 1;
-timeStep = 0.005;
-t=0.005:timeStep:length(dataEncoded)*timeStep;
+Fs = 200; % Sampling frequency
+Ts = 1/Fs; %Sampling Period
+t=0.005:Ts:length(dataEncoded)*Ts;
 f=5;%Frequency of the carrier
 %Here we generate the modulated signal by multiplying it with
 %carrier (basis function)
@@ -102,37 +100,52 @@ f=5;%Frequency of the carrier
 % Modulated=exp(j*pi*arg(dataEncoded)).*(sqrt(2/T)*cos(2*pi*f*t));
 % Modulated=exp(j*pi*arg(dataEncoded)).*(sqrt(2/T)*cos(2*pi*f*t));
 Modulated=(sqrt(2/T)*cos(2*pi*f*t + arg(dataEncoded)));%.*exp(j*pi*arg(dataEncoded));
-maxValue = max(Modulated);
+
+L = length(dataEncoded);
+freq = Fs*(0:(L/2))/L;
+sig_fft = fft(Modulated);
+P2 = abs(sig_fft/L); %Computes the two-sided spectrum
+P1 = P2(1:L/2+1); %Computes the single-sided spectrum
+P1(2:end-1) = 2*P1(2:end-1); %Computes the even-valued signal length L
+
 subplot(4,2,1:2);
+maxValue = max(Modulated);
 plot(Modulated,".-");axis([0 number*4 -maxValue maxValue], grid);xlabel('Time (seconds)');ylabel('Amplitude (volts)');title('QPSK Modulated signal');
 
+strFrame = ["Frame UW: " mat2str(frame(1:length(uw))) ];
 subplot(4,2,3:4);
 plotFrame = kron(frame, ones(1,(number/bitsPerSymbol)));
-stem(plotFrame,".-");axis([-0.1 number*4 -0.1 1.1], grid);xlabel('Bit Position');ylabel('Value');title('Frame');
+stem(plotFrame,".-");axis([-0.1 number*4 -0.1 1.1], grid);xlabel('Bit Position');ylabel('Value');title(strFrame);
 % polar(dataEncoded,".");axis(grid);xlabel('Re');ylabel('Im');title('QPSK Modulated signal');
 
 subplot(4,2,5);
 polar(dataEncoded,".");axis(grid);xlabel('Re');ylabel('Im');title('QPSK Modulated signal');
 subplot(4,2,6);
-plot(dataEncoded,".");axis(grid);xlabel('Re');ylabel('Im');title('QPSK Modulated signal');
+maxValue = max(P1);
+plot(freq, P1);axis([-f*1 f*3 0 maxValue], grid);xlabel("f\(Hz\)");ylabel("|P1(f)|");
+xlabel('frequency (Hz)');ylabel('Amplitude');title('Power Spectrum');
+% plot(dataEncoded,".");axis(grid);xlabel('Re');ylabel('Im');title('QPSK Modulated signal');
 
-receivedSymbols = dataSymbols(1:number:number*5);
-receivedSamples = dataEncoded(1:number:number*5);
-receivedPhases = arg(receivedSamples)*180/pi;
+transmittedSymbols = dataSymbols(1:number:number*5);
+transmittedSamples = dataEncoded(1:number:end);
+transmittedPhases = arg(transmittedSamples)*180/pi;
 
-printf("The received phases are: %s = %d; %s = %d; %s = %d; %s = %d; %s = %d\n",
-    dec2bin(receivedSymbols(1)-1), receivedPhases(1), dec2bin(receivedSymbols(2)-1), receivedPhases(2),
-    dec2bin(receivedSymbols(3)-1), receivedPhases(3), dec2bin(receivedSymbols(4)-1), receivedPhases(4),
-    dec2bin(receivedSymbols(5)-1), receivedPhases(5));
+printf("The first transmitted phases are: %s = %d; %s = %d; %s = %d; %s = %d; %s = %d\n",
+    dec2bin(transmittedSymbols(1)-1), transmittedPhases(1), dec2bin(transmittedSymbols(2)-1), transmittedPhases(2),
+    dec2bin(transmittedSymbols(3)-1), transmittedPhases(3), dec2bin(transmittedSymbols(4)-1), transmittedPhases(4),
+    dec2bin(transmittedSymbols(5)-1), transmittedPhases(5));
 
-% Fs = 200; %Sampling Freq
-% Ts = 1/Fs; %Sampling Period
-% L = length(dataEncoded); %Length of signal
-% t1 = (0.005:L-1)*Ts; %Time vector
-% A = 1;
-%
-% f1 = 10;
-% T = (1/f1);
+countPhase00 = length(find(transmittedPhases == 45));
+countPhase01 = length(find(transmittedPhases == 135));
+transmittedPhasesRemovePositive = transmittedPhases(find(transmittedPhases != 135));
+transmittedPhasesRemovePositive = transmittedPhasesRemovePositive(find(transmittedPhasesRemovePositive != 45));
+transmittedPhasesRemovePositive(1:end) *= -1.0;
+countPhase10 = length(find(transmittedPhasesRemovePositive == 135));
+countPhase11 = length(find(transmittedPhasesRemovePositive == 45));
+
+printf("The total count of transmitted phases are: 00=>(45) = %d; 01=>(135) = %d; 10=>(-135) = %d; 11=>(-45) = %d\n",
+    countPhase00, countPhase01, countPhase10, countPhase11);
+
 
 % *********************************************************************
 % So the signal is already modulated, and "transmitted"
